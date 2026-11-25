@@ -136,11 +136,11 @@ button:disabled{opacity:.6;cursor:default}
   <label class="fld">Client<input id="svClient" class="rep" type="text" maxlength="100" autocomplete="organization"></label>
   <label class="fld">Site address<textarea id="svAddr" class="rep" rows="3" maxlength="300" autocomplete="street-address"></textarea></label>
   <div class="grid2">
-   <label class="fld">Date of survey<input id="svDate" class="rep" type="date"></label>
+   <label class="fld">Completed on<input id="svDate" class="rep" type="date"></label>
    <label class="fld">Surveyed by<input id="svBy" class="rep" type="text" maxlength="100" autocomplete="name"></label>
   </div>
   <div class="opt">
-   <div><b>PDF survey report</b><span>Numbered map of the whole trail, an index of coordinates, close-up section maps for long trails, then every photo with its number and position.</span></div>
+   <div><b>PDF survey report</b><span>Your cover page, a numbered map of the whole trail, an index of coordinates, close-up section maps for long trails, every photo with its number and position, then your back page.</span></div>
    <div class="row"><button type="button" class="primary" id="mkPdf">Create PDF</button></div>
   </div>
   <div class="ready" id="pdfReady" hidden>
@@ -371,7 +371,8 @@ const isoDay=t=>{const d=new Date(t);return d.getFullYear()+'-'+String(d.getMont
 const defaultDate=()=>{const s=sorted();return isoDay(s.length?s[0].t:Date.now())};
 const surveyDate=()=>{const v=$('#svDate').value||defaultDate(),[y,m,d]=v.split('-').map(Number);return new Date(y,m-1,d).toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'})};
 const val=id=>$('#'+id).value.trim();
-const defaultName=()=>{const s=sorted();return 'Survey '+(s.length?new Date(s[0].t):new Date()).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})};
+const surveyDateShort=()=>{const v=$('#svDate').value||defaultDate(),[y,m,d]=v.split('-').map(Number);return new Date(y,m-1,d).toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'})};
+const defaultName=()=>{const s=sorted(),c=($('#svClient')&&$('#svClient').value.trim())||'';const dv=($('#svDate')&&$('#svDate').value)||isoDay(s.length?s[0].t:Date.now()),[yy,mm,dd]=dv.split('-').map(Number);return (c?c+' ':'')+'condition survey '+new Date(yy,mm-1,dd).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})};
 const surveyName=()=>$('#svName').value.trim()||defaultName();
 const fileBase=()=>surveyName().replace(/[^\w\- ]+/g,'').trim().replace(/\s+/g,'-').toLowerCase()||'survey';
 const hav=(a,b)=>{const r=Math.PI/180,dl=(b.lat-a.lat)*r,dn=(b.lon-a.lon)*r,x=Math.sin(dl/2)**2+Math.cos(a.lat*r)*Math.cos(b.lat*r)*Math.sin(dn/2)**2;return 2*6371e3*Math.asin(Math.sqrt(x))};
@@ -429,7 +430,7 @@ const closeSheet=()=>{$('#sheet').hidden=true};
 $('#share').onclick=openSheet;$('#shClose').onclick=closeSheet;
 $('#sheet').addEventListener('click',e=>{if(e.target.id==='sheet')closeSheet()});
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('#sheet').hidden)closeSheet()});
-document.querySelectorAll('.rep').forEach(el=>el.addEventListener('input',()=>{try{localStorage.setItem(FIELDS[el.id],el.value)}catch(e){}$('#pdfReady').hidden=true;refreshShare()}));
+document.querySelectorAll('.rep').forEach(el=>el.addEventListener('input',()=>{try{localStorage.setItem(FIELDS[el.id],el.value)}catch(e){}$('#pdfReady').hidden=true;$('#svName').placeholder=defaultName();refreshShare()}));
 $('#kmlShare').onclick=()=>shareFile(new Blob([kml()],{type:'application/vnd.google-earth.kml+xml'}),fileBase()+'.kml');
 $('#gmShare').onclick=async()=>{
  const u=gmRoute();if(!u)return;
@@ -492,9 +493,9 @@ const loadPdfLib=()=>libP||(libP=new Promise((res,rej)=>{const sc=document.creat
 async function buildPdf(progress){
  const{PDFDocument,StandardFonts,rgb,PDFString}=await loadPdfLib();
  const doc=await PDFDocument.create(),name=surveyName();
- doc.setTitle(name);doc.setCreator('Photo trail');doc.setProducer('Photo trail');
+ doc.setTitle(name);doc.setCreator('Kerri Collins Photography & Design');doc.setProducer('Kerri Collins Photography & Design');doc.setAuthor(val('svBy')||'Kerri Collins');
  const f=await doc.embedFont(StandardFonts.Helvetica),fb=await doc.embedFont(StandardFonts.HelveticaBold);
- const PW=595.28,PH=841.89,M=40,CW=PW-2*M,INK=rgb(.086,.125,.102),MUTE=rgb(.36,.42,.38),OR=rgb(1,.353,.122),LINE=rgb(.85,.88,.85),PALE=rgb(.95,.96,.94),WHITE=rgb(1,1,1);
+ const PW=595.28,PH=841.89,M=40,CW=PW-2*M,INK=rgb(.086,.125,.102),MUTE=rgb(.36,.42,.38),OR=rgb(1,.353,.122),TEAL=rgb(68/255,134/255,138/255),LINE=rgb(.85,.88,.85),PALE=rgb(.95,.96,.94),WHITE=rgb(1,1,1);
  const T=s=>String(s).replace(/[‘’]/g,"'").replace(/[“”]/g,'"').replace(/[^\x20-\x7E -ÿ–—•…]/g,'?');
  const all=sorted().map((p,i)=>Object.assign({},p,{n:i+1})),pts=all.filter(p=>p.lat!=null);
  let page,y;
@@ -505,39 +506,36 @@ async function buildPdf(progress){
  const badge=(n,cx,cy,r)=>{page.drawCircle({x:cx,y:PH-cy,size:r,color:OR,borderColor:WHITE,borderWidth:1.5});const t=String(n),sz=r*(t.length>2?.85:1.05),w=fb.widthOfTextAtSize(t,sz);page.drawText(t,{x:cx-w/2,y:PH-cy-sz*.36,size:sz,font:fb,color:WHITE})};
 
  const wrap=(s,font,size,w)=>{const out=[];for(const para of String(s).split(/\r?\n/).map(T)){let line='';for(const word of para.split(/\s+/).filter(Boolean)){const t=line?line+' '+word:word;if(font.widthOfTextAtSize(t,size)>w&&line){out.push(line);line=word}else line=t}if(line)out.push(line)}return out};
- // cover page
- newPage();
- page.drawRectangle({x:0,y:PH-210,width:PW,height:210,color:rgb(.047,.075,.059)});
- try{const ic=await doc.embedPng(await (await fetch('icon-192.png')).arrayBuffer());page.drawImage(ic,{x:M,y:PH-M-44,width:44,height:44})}catch(e){}
- page.drawText('Photo trail',{x:M+56,y:PH-M-27,size:13,font:fb,color:WHITE});
- text('Survey report',M,130,12,fb,OR);
- const tl=wrap(name,fb,30,CW).slice(0,2);tl.forEach((l,i)=>page.drawText(l,{x:M,y:PH-150-30-i*34,size:30,font:fb,color:WHITE}));
- y=210+44;
- const rows=[['Client',val('svClient')],['Site address',val('svAddr')],['Date of survey',surveyDate()],['Surveyed by',val('svBy')]].filter(r=>r[1]);
- for(const[lab,v]of rows){
-  text(lab,M,y,10,fb,OR);y+=16;
-  for(const l of wrap(v,f,16,CW).slice(0,6)){text(l,M,y,16,lab==='Site address'?f:fb);y+=21}
-  y+=14;page.drawLine({start:{x:M,y:PH-y},end:{x:M+CW,y:PH-y},thickness:.6,color:LINE});y+=20;
- }
- const sumY=Math.max(y+6,PH-M-150),cw4=CW/4;
- page.drawRectangle({x:M,y:PH-sumY-78,width:CW,height:78,color:PALE});
- [[String(all.length),'Photos'],[String(pts.length),'With location'],[fmtDist(routeLen(pts)),'Route length'],[all.length?new Date(all[0].t).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})+'–'+new Date(all[all.length-1].t).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}):'–','Time on site']].forEach(([v,l],i)=>{
-  text(v,M+16+i*cw4,sumY+18,17,fb);text(l,M+16+i*cw4,sumY+44,9,f,MUTE)});
- text('Report generated '+new Date().toLocaleString('en-GB',{day:'numeric',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit'}),M,PH-M-24,9,f,MUTE);
+ // cover page: Kerri Collins template, with client, address and date filled in
+ const k=PW/1414,X=v=>v*k,BL=v=>PH-v*k; // template pixels -> points
+ const bgPage=async file=>{newPage();try{const im=await doc.embedJpg(await (await fetch(file)).arrayBuffer());page.drawImage(im,{x:0,y:0,width:PW,height:PH})}catch(e){}};
+ const addrLines=()=>{const a=val('svAddr');return(/\n/.test(a)?a.split(/\r?\n/):a.split(/,/)).map(l=>T(l.trim()).toUpperCase()).filter(Boolean)};
+ const capsBlock=(lines,x,base,maxW,maxH)=>{let size=X(32),pitch=X(39);const widest=()=>Math.max(0,...lines.map(l=>fb.widthOfTextAtSize(l,size)));
+  while(size>7&&(widest()>maxW||(lines.length-1)*pitch+size>maxH)){size*=.95;pitch*=.95}
+  lines.forEach((l,i)=>page.drawText(l,{x,y:base-i*pitch,size,font:fb,color:rgb(0,0,0)}))};
+ const doneOn=T(surveyDateShort()).toUpperCase();
+ await bgPage('cover.jpg');
+ const cl=T(val('svClient')).toUpperCase();
+ if(cl){let cs=X(33.4);while(cs>8&&fb.widthOfTextAtSize(cl,cs)>X(660))cs*=.95;const tw=fb.widthOfTextAtSize(cl,cs);
+  page.drawRectangle({x:X(148),y:BL(621),width:tw+X(77),height:X(87),color:rgb(0,0,0)});page.drawText(cl,{x:X(183),y:BL(577)-cs*.36,size:cs,font:fb,color:WHITE})}
+ capsBlock(addrLines(),X(151),BL(1297),X(735),X(178));
+ page.drawText(doneOn,{x:X(146),y:BL(1545),size:X(32),font:fb,color:rgb(0,0,0)});
  // overview page: title, map, index
  newPage();
- text('Survey report',M,y,10,fb,OR);y+=16;
- text(fit(name,fb,24,CW),M,y,24,fb);y+=32;
+ text('Photographic condition survey',M,y,10,fb,TEAL);y+=16;
+ for(const l of wrap(name,fb,22,CW).slice(0,2)){text(l,M,y,22,fb);y+=27}y+=4;
  const span=all.length?fmtLong(all[0].t)+'  to  '+fmtLong(all[all.length-1].t):'';
  text(`${all.length} photo${all.length===1?'':'s'}  •  ${pts.length} located  •  route ${fmtDist(routeLen(pts))}`,M,y,10,f,MUTE);y+=14;
- text(span,M,y,10,f,MUTE);y+=22;
+ text(span,M,y,10,f,MUTE);y+=14;
+ if(val('svBy')){text('Surveyed by '+val('svBy'),M,y,10,f,MUTE);y+=14}
+ y+=8;
  progress('Drawing the map…');
  const mh=CW*.75,mp=await mapPicture(pts,1600,1200),mimg=await doc.embedJpg(mp.data);
  page.drawImage(mimg,{x:M,y:PH-y-mh,width:CW,height:mh});page.drawRectangle({x:M,y:PH-y-mh,width:CW,height:mh,borderColor:LINE,borderWidth:.8});
  y+=mh+10;
  if(!mp.sat){text('Satellite imagery was unavailable when this report was made, so the points are shown on a plain grid.',M,y,8.5,f,MUTE);y+=13}
  const gu=gmRoute();
- if(gu){const lt=pts.length>10?`Open photos 1–10 as a route in Google Maps (Google allows 10 stops)`:'Open this route in Google Maps';text(lt,M,y,10,fb,OR);link(M,y,fb.widthOfTextAtSize(T(lt),10),12,gu);y+=22}
+ if(gu){const lt=pts.length>10?`Open photos 1–10 as a route in Google Maps (Google allows 10 stops)`:'Open this route in Google Maps';text(lt,M,y,10,fb,TEAL);link(M,y,fb.widthOfTextAtSize(T(lt),10),12,gu);y+=22}
  // index table
  const cols=[[M,'No.',30],[M+32,'Taken',150],[M+190,'Latitude',85],[M+280,'Longitude',85],[M+372,'Source',CW-372]];
  const head=()=>{text('Photo index',M,y,13,fb);y+=20;cols.forEach(([x,h])=>text(h,x,y,8.5,fb,MUTE));y+=12;page.drawLine({start:{x:M,y:PH-y},end:{x:M+CW,y:PH-y},thickness:.8,color:LINE});y+=5};
@@ -581,13 +579,17 @@ async function buildPdf(progress){
    text(`Lat ${p.lat.toFixed(6)}   Lon ${p.lon.toFixed(6)}`,x,ty,9.5,fb);ty+=13;
    text(`${dms(p.lat,'N','S')}   ${dms(p.lon,'E','W')}`,x,ty,9);ty+=13;
    text(srcLong(p),x,ty,9,f,MUTE);ty+=14;
-   text('View on Google Maps',x,ty,9,fb,OR);link(x,ty-2,fb.widthOfTextAtSize('View on Google Maps',9),13,gmPoint(p));
+   text('View on Google Maps',x,ty,9,fb,TEAL);link(x,ty-2,fb.widthOfTextAtSize('View on Google Maps',9),13,gmPoint(p));
   }else text('No location recorded',x,ty,9.5,fb,MUTE);
   await new Promise(r=>setTimeout(r,0));
  }
+ // back page
+ await bgPage('back.jpg');
+ capsBlock(addrLines(),X(150),BL(1138),X(735),X(180));
+ page.drawText(doneOn,{x:X(144),y:BL(1391),size:X(32),font:fb,color:rgb(0,0,0)});
  // footers
  const pages=doc.getPages(),nm=T(name);
- pages.forEach((pg,i)=>{const s=`Page ${i+1} of ${pages.length}`;pg.drawText(fit(nm+'  •  Photo trail',f,8,CW-80),{x:M,y:22,size:8,font:f,color:MUTE});pg.drawText(s,{x:PW-M-f.widthOfTextAtSize(s,8),y:22,size:8,font:f,color:MUTE})});
+ pages.forEach((pg,i)=>{if(i===0||i===pages.length-1)return;const s=`Page ${i+1} of ${pages.length}`;pg.drawText(fit(nm,f,8,CW-80),{x:M,y:22,size:8,font:f,color:MUTE});pg.drawText(s,{x:PW-M-f.widthOfTextAtSize(s,8),y:22,size:8,font:f,color:MUTE})});
  return{blob:new Blob([await doc.save()],{type:'application/pdf'}),map:mp.data,pages:pages.length};
 }
 $('#mkPdf').onclick=async()=>{
