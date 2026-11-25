@@ -71,8 +71,22 @@ ol{list-style:none;margin:0;padding:0;display:grid;gap:8px}
 .acts{grid-column:3;display:flex;gap:6px;flex-wrap:wrap}
 .acts button{min-height:36px;padding:0 12px;font-size:14px;border-radius:10px}
 .empty{border:2px dashed var(--line);border-radius:14px;padding:20px;color:var(--mute);font-size:15px}
-.toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--btn);color:var(--btnink);padding:12px 16px;border-radius:12px;font-size:14px;max-width:min(92vw,460px);z-index:20;box-shadow:0 8px 28px #0006}
+.toast{z-index:40!important;position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--btn);color:var(--btnink);padding:12px 16px;border-radius:12px;font-size:14px;max-width:min(92vw,460px);z-index:20;box-shadow:0 8px 28px #0006}
 .toast[hidden]{display:none}
+.sheet{position:fixed;inset:0;z-index:30;background:#0009;display:flex;align-items:flex-end;justify-content:center}
+.sheet[hidden]{display:none}
+.sheet-in{background:var(--bg);color:var(--ink);width:min(560px,100%);max-height:92vh;overflow:auto;border-radius:20px 20px 0 0;padding:18px 18px calc(18px + env(safe-area-inset-bottom))}
+@media(min-width:700px){.sheet{align-items:center}.sheet-in{border-radius:20px}}
+.sh-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}.sh-head h2{font:800 22px/1.2 Archivo,sans-serif;margin:0}
+.sh-head button{width:44px;padding:0;justify-content:center}
+.fld{display:grid;gap:6px;font-size:14px;color:var(--mute);margin-bottom:12px}
+.fld input{font:16px Inter,sans-serif;min-height:44px;border-radius:12px;border:1px solid var(--line);background:var(--panel);color:var(--ink);padding:0 12px}
+.opt{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px;display:grid;gap:10px;margin-bottom:10px}
+.opt b{display:block}.opt span{display:block;font-size:14px;color:var(--mute)}
+.row{display:flex;gap:8px;flex-wrap:wrap}.btn{text-decoration:none}
+.ready{display:grid;grid-template-columns:120px minmax(0,1fr);gap:12px;align-items:center;margin:-4px 0 10px;padding:10px;border-radius:14px;background:var(--panel);border:2px solid var(--sel)}
+.ready[hidden]{display:none}.ready img{width:120px;height:90px;object-fit:cover;border-radius:8px}.ready span{display:block;font-size:14px;color:var(--mute);margin-bottom:8px}
+button:disabled{opacity:.6;cursor:default}
 @media(prefers-reduced-motion:no-preference){.pin{transition:transform .15s}}
 </style>
 </head>
@@ -86,7 +100,7 @@ ol{list-style:none;margin:0;padding:0;display:grid;gap:8px}
   <button class="primary" id="snap" type="button">Take photo</button>
   <button id="add" type="button">Add photos</button>
   <button id="sample" type="button">Sample walk</button>
-  <button id="copy" type="button">Copy GeoJSON</button>
+  <button id="share" type="button">Share trail</button>
   <button id="clear" type="button">Clear</button>
   <input id="camIn" type="file" accept="image/*" capture="environment">
   <input id="fileIn" type="file" accept="image/*,.heic,.heif" multiple>
@@ -112,6 +126,28 @@ ol{list-style:none;margin:0;padding:0;display:grid;gap:8px}
   <ol id="list"></ol>
  </aside>
 </main>
+<div class="sheet" id="sheet" hidden role="dialog" aria-modal="true" aria-labelledby="shTitle">
+ <div class="sheet-in">
+  <div class="sh-head"><h2 id="shTitle">Share trail</h2><button type="button" id="shClose" aria-label="Close">✕</button></div>
+  <label class="fld">Survey name<input id="svName" type="text" maxlength="80" autocomplete="off"></label>
+  <div class="opt">
+   <div><b>PDF survey report</b><span>Numbered map of the whole trail, an index of coordinates, close-up section maps for long trails, then every photo with its number and position.</span></div>
+   <div class="row"><button type="button" class="primary" id="mkPdf">Create PDF</button></div>
+  </div>
+  <div class="ready" id="pdfReady" hidden>
+   <img id="pdfThumb" alt="Map used in the report">
+   <div><span id="pdfInfo"></span><div class="row"><button type="button" id="pdfShare">Share…</button><a class="btn" id="pdfSave" href="#" download>Save PDF</a></div></div>
+  </div>
+  <div class="opt">
+   <div><b>Google Earth / My Maps file (KML)</b><span>Every numbered point and the route. Open it in Google Earth, or import it at mymaps.google.com and share that map's link.</span></div>
+   <div class="row"><button type="button" id="kmlShare">Share…</button><a class="btn" id="kmlSave" href="#" download>Save KML</a></div>
+  </div>
+  <div class="opt">
+   <div><b>Google Maps link</b><span id="gmInfo"></span></div>
+   <div class="row"><button type="button" id="gmShare">Send link</button><a class="btn" id="gmOpen" href="#" target="_blank" rel="noopener">Open</a></div>
+  </div>
+ </div>
+</div>
 <div class="toast" id="toast" hidden></div>
 <script>
 {
@@ -207,7 +243,7 @@ function tap(e){
  const r=map.getBoundingClientRect(),sx=e.clientX-r.left,sy=e.clientY-r.top;
  if(placing!=null){
   const p=photos.find(q=>q.id===placing);
-  if(p){[p.lat,p.lon]=unproject(view.cx-map.clientWidth/2+sx,view.cy-map.clientHeight/2+sy,view.z);p.src='manual';sel=p.id;save(p)}
+  if(p){[p.lat,p.lon]=unproject(view.cx-map.clientWidth/2+sx,view.cy-map.clientHeight/2+sy,view.z);p.src='manual';p.acc=null;sel=p.id;save(p)}
   placing=null;map.classList.remove('placing');refresh();return;
  }
  const pin=document.elementFromPoint(e.clientX,e.clientY)?.closest('.pin');
@@ -282,7 +318,7 @@ async function addFiles(files,live){
  for(const f of files){
   let ex={};try{ex=parseExif(await f.slice(0,524288).arrayBuffer())}catch(e){}
   const p={id:++uid,name:f.name||'Photo',url:URL.createObjectURL(f),blob:f,t:null,lat:null,lon:null,src:null,timeSrc:''};
-  if(live){p.t=live.t;p.timeSrc='taken in app';if(live.pos){p.lat=live.pos.latitude;p.lon=live.pos.longitude;p.src='live'}}
+  if(live){p.t=live.t;p.timeSrc='taken in app';if(live.pos){p.lat=live.pos.latitude;p.lon=live.pos.longitude;p.acc=live.pos.accuracy;p.src='live'}}
   if(p.t==null){if(ex.date&&!isNaN(ex.date)){p.t=ex.date.getTime();p.timeSrc='camera time'}else{p.t=f.lastModified||Date.now();p.timeSrc='file date'}}
   if(p.lat==null&&ex.lat!=null){p.lat=ex.lat;p.lon=ex.lon;p.src='exif'}
   if(p.lat==null)noLoc++;
@@ -311,18 +347,225 @@ map.addEventListener('drop',e=>{e.preventDefault();const f=[...e.dataTransfer.fi
 
 /* ---------- sample, export, clear ---------- */
 const SAMPLE=[['Westminster Bridge',51.5008,-0.1219,'#5b8db8'],['London Eye',51.5033,-0.1196,'#8a6fb5'],['Southbank Centre',51.5063,-0.1160,'#c98a3d'],['Tate Modern',51.5076,-0.0994,'#6a7f5a'],['Borough Market',51.5055,-0.0910,'#b5584a'],['Tower Bridge',51.5055,-0.0754,'#3f7f8c']];
-const thumb=c=>'data:image/svg+xml;utf8,'+encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" fill="${c}"/><circle cx="46" cy="18" r="7" fill="#fff8"/><path d="M0 50 20 30 34 44 44 36 64 54V64H0z" fill="#0005"/></svg>`);
+const thumb=c=>'data:image/svg+xml;utf8,'+encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="640" height="480" viewBox="0 0 64 48" preserveAspectRatio="none"><rect width="64" height="64" fill="${c}"/><circle cx="46" cy="18" r="7" fill="#fff8"/><path d="M0 50 20 30 34 44 44 36 64 54V64H0z" fill="#0005"/></svg>`);
 $('#sample').onclick=()=>{
  const base=new Date(2026,10,21,10,0).getTime();
  SAMPLE.forEach(([n,lat,lon,c],i)=>{const p={id:++uid,name:n+' (sample)',url:thumb(c),blob:null,t:base+i*25*60000,lat,lon,src:'exif',timeSrc:'camera time'};photos.push(p);save(p)});
  refresh(true);
 };
-$('#copy').onclick=async()=>{
- const s=sorted();if(!s.length){toast('Nothing to copy yet.');return}
- const gj={type:'FeatureCollection',features:s.filter(p=>p.lat!=null).map(p=>({type:'Feature',geometry:{type:'Point',coordinates:[+p.lon.toFixed(6),+p.lat.toFixed(6)]},properties:{order:s.indexOf(p)+1,name:p.name,taken:new Date(p.t).toISOString(),source:p.src}}))};
- try{await navigator.clipboard.writeText(JSON.stringify(gj,null,1));toast('GeoJSON copied: paste it into any mapping tool.')}catch(e){toast("Copying isn't allowed here.")}
-};
 $('#clear').onclick=()=>{photos.forEach(p=>p.url.startsWith('blob:')&&URL.revokeObjectURL(p.url));photos=[];dropAll();sel=null;placing=null;map.classList.remove('placing');refresh()};
+
+/* ---------- share trail: PDF report, KML, Google Maps link ---------- */
+const located=()=>sorted().map((p,i)=>Object.assign({},p,{n:i+1})).filter(p=>p.lat!=null);
+const NAMEKEY='pt-survey-name';
+const defaultName=()=>{const s=sorted();return 'Survey '+(s.length?new Date(s[0].t):new Date()).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})};
+const surveyName=()=>$('#svName').value.trim()||defaultName();
+const fileBase=()=>surveyName().replace(/[^\w\- ]+/g,'').trim().replace(/\s+/g,'-').toLowerCase()||'survey';
+const hav=(a,b)=>{const r=Math.PI/180,dl=(b.lat-a.lat)*r,dn=(b.lon-a.lon)*r,x=Math.sin(dl/2)**2+Math.cos(a.lat*r)*Math.cos(b.lat*r)*Math.sin(dn/2)**2;return 2*6371e3*Math.asin(Math.sqrt(x))};
+const routeLen=pts=>pts.reduce((s,p,i)=>i?s+hav(pts[i-1],p):0,0);
+const fmtDist=m=>m<1000?Math.round(m)+' m':(m/1000).toFixed(2)+' km';
+const fmtLong=t=>new Date(t).toLocaleString('en-GB',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit'});
+const dms=(v,pos,neg)=>{const a=Math.abs(v),d=Math.floor(a),mf=(a-d)*60,m=Math.floor(mf),sec=(mf-m)*60;return d+'°'+String(m).padStart(2,'0')+"'"+sec.toFixed(1).padStart(4,'0')+'"'+(v>=0?pos:neg)};
+const ll=p=>p.lat.toFixed(6)+','+p.lon.toFixed(6);
+const gmPoint=p=>'https://www.google.com/maps/search/?api=1&query='+ll(p);
+function gmRoute(){
+ const pts=located().slice(0,10);if(!pts.length)return null;
+ if(pts.length===1)return gmPoint(pts[0]);
+ let u='https://www.google.com/maps/dir/?api=1&travelmode=walking&origin='+ll(pts[0])+'&destination='+ll(pts[pts.length-1]);
+ if(pts.length>2)u+='&waypoints='+encodeURIComponent(pts.slice(1,-1).map(ll).join('|'));
+ return u;
+}
+const srcLong=p=>p.src==='live'?'GPS logged in app'+(p.acc?' (±'+Math.round(p.acc)+' m)':''):p.src==='exif'?'From photo location data':'Placed by hand';
+const srcShort={live:'GPS in app',exif:'Photo data',manual:'By hand'};
+function kml(){
+ const x=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'),pts=located();
+ const pm=pts.map(p=>`  <Placemark><name>${p.n}</name><description>${x(p.name)} | ${x(fmtLong(p.t))} | ${ll(p)} | ${x(srcLong(p))}</description><styleUrl>#pt</styleUrl><Point><coordinates>${p.lon.toFixed(6)},${p.lat.toFixed(6)},0</coordinates></Point></Placemark>`).join('\n');
+ const rt=pts.length>1?`  <Placemark><name>Route</name><styleUrl>#rt</styleUrl><LineString><tessellate>1</tessellate><coordinates>${pts.map(p=>p.lon.toFixed(6)+','+p.lat.toFixed(6)+',0').join(' ')}</coordinates></LineString></Placemark>`:'';
+ return `<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2"><Document>
+  <name>${x(surveyName())}</name>
+  <Style id="pt"><IconStyle><color>ff1f5aff</color><scale>1.1</scale><Icon><href>http://maps.google.com/mapfiles/kml/paddle/orange-blank.png</href></Icon></IconStyle><LabelStyle><scale>1</scale></LabelStyle></Style>
+  <Style id="rt"><LineStyle><color>ffffffff</color><width>3</width></LineStyle></Style>
+${pm}
+${rt}
+</Document></kml>`;
+}
+async function shareFile(blob,name){
+ const f=new File([blob],name,{type:blob.type});
+ if(navigator.canShare&&navigator.canShare({files:[f]})){try{await navigator.share({files:[f],title:surveyName()})}catch(e){if(e.name!=='AbortError')toast("Couldn't open sharing. Use Save instead.")}}
+ else toast("This device can't share files directly. Use Save, then send the file.");
+}
+let kmlUrl=null,pdfBlob=null,pdfUrl=null;
+function refreshShare(){
+ const pts=located(),u=gmRoute();
+ if(kmlUrl)URL.revokeObjectURL(kmlUrl);
+ kmlUrl=URL.createObjectURL(new Blob([kml()],{type:'application/vnd.google-earth.kml+xml'}));
+ const ks=$('#kmlSave');ks.href=kmlUrl;ks.download=fileBase()+'.kml';
+ $('#gmOpen').href=u||'#';
+ $('#gmInfo').textContent=pts.length>10?`Google Maps routes allow 10 stops, so this link covers photos ${pts[0].n}–${pts[9].n} only. Use the KML file for all ${pts.length}.`:'Opens the route in Google Maps, walking from 1 to '+pts.length+'. Anyone with the link can open it.';
+}
+function openSheet(){
+ if(!located().length){toast('Add some photos with locations first.');return}
+ let nm='';try{nm=localStorage.getItem(NAMEKEY)||''}catch(e){}
+ $('#svName').value=nm;$('#svName').placeholder=defaultName();
+ $('#pdfReady').hidden=true;refreshShare();$('#sheet').hidden=false;
+}
+const closeSheet=()=>{$('#sheet').hidden=true};
+$('#share').onclick=openSheet;$('#shClose').onclick=closeSheet;
+$('#sheet').addEventListener('click',e=>{if(e.target.id==='sheet')closeSheet()});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('#sheet').hidden)closeSheet()});
+$('#svName').addEventListener('input',()=>{try{localStorage.setItem(NAMEKEY,$('#svName').value)}catch(e){}$('#pdfReady').hidden=true;refreshShare()});
+$('#kmlShare').onclick=()=>shareFile(new Blob([kml()],{type:'application/vnd.google-earth.kml+xml'}),fileBase()+'.kml');
+$('#gmShare').onclick=async()=>{
+ const u=gmRoute();if(!u)return;
+ if(navigator.share){try{await navigator.share({title:surveyName(),url:u});return}catch(e){if(e.name==='AbortError')return}}
+ try{await navigator.clipboard.writeText(u);toast('Link copied. Paste it into a message or email.')}catch(e){toast('Tap Open, then share the page from Google Maps.')}
+};
+$('#pdfShare').onclick=()=>pdfBlob&&shareFile(pdfBlob,fileBase()+'.pdf');
+
+/* map picture for the report */
+async function mapPicture(pts,W,H){
+ let z=17,cx,cy;
+ if(pts.length===1)[cx,cy]=project(pts[0].lat,pts[0].lon,z);
+ else for(z=18;z>=MINZ;z--){
+  const xy=pts.map(p=>project(p.lat,p.lon,z)),xs=xy.map(a=>a[0]),ys=xy.map(a=>a[1]);
+  const x0=Math.min(...xs),x1=Math.max(...xs),y0=Math.min(...ys),y1=Math.max(...ys);
+  if(x1-x0<=W*.86&&y1-y0<=H*.84||z===MINZ){cx=(x0+x1)/2;cy=(y0+y1)/2;break}
+ }
+ const left=cx-W/2,top=cy-H/2,n=2**z,jobs=[];
+ for(let tx=Math.floor(left/TILE);tx<=Math.floor((left+W)/TILE);tx++)for(let ty=Math.floor(top/TILE);ty<=Math.floor((top+H)/TILE);ty++){
+  if(ty<0||ty>=n)continue;
+  jobs.push(new Promise(res=>{const im=new Image();im.crossOrigin='anonymous';const to=setTimeout(()=>res(null),10000);
+   im.onload=()=>{clearTimeout(to);res([im,tx*TILE-left,ty*TILE-top])};im.onerror=()=>{clearTimeout(to);res(null)};im.src=tileUrl(z,((tx%n)+n)%n,ty)}));
+ }
+ const tiles=(await Promise.all(jobs)).filter(Boolean),k=W/800;
+ const draw=withTiles=>{
+  const c=document.createElement('canvas');c.width=W;c.height=H;const g=c.getContext('2d');
+  g.fillStyle='#16241b';g.fillRect(0,0,W,H);
+  if(withTiles)for(const[im,x,y]of tiles)g.drawImage(im,x,y);
+  else{g.strokeStyle='rgba(255,255,255,.08)';g.lineWidth=1;for(let x=-(left%64);x<W;x+=64){g.beginPath();g.moveTo(x,0);g.lineTo(x,H);g.stroke()}for(let y=-(top%64);y<H;y+=64){g.beginPath();g.moveTo(0,y);g.lineTo(W,y);g.stroke()}}
+  const sp=pts.map(p=>{const[x,y]=project(p.lat,p.lon,z);return[x-left,y-top]});
+  g.save();g.shadowColor='rgba(0,0,0,.6)';g.shadowBlur=3*k;g.strokeStyle='#fff';g.lineWidth=2.5*k;g.setLineDash([7*k,6*k]);g.lineJoin=g.lineCap='round';
+  g.beginPath();sp.forEach(([x,y],i)=>i?g.lineTo(x,y):g.moveTo(x,y));g.stroke();g.restore();
+  const r=(pts.length>40?10:pts.length>15?12:14)*k;
+  sp.forEach(([x,y],i)=>{
+   g.save();g.shadowColor='rgba(0,0,0,.5)';g.shadowBlur=4*k;g.fillStyle='#ff5a1f';g.beginPath();g.arc(x,y,r,0,7);g.fill();g.restore();
+   g.strokeStyle='#fff';g.lineWidth=2.2*k;g.beginPath();g.arc(x,y,r,0,7);g.stroke();
+   const t=String(pts[i].n);g.fillStyle='#fff';g.textAlign='center';g.textBaseline='middle';
+   g.font=`800 ${(t.length>2?.8:t.length>1?.95:1.1)*r}px Archivo, Arial, sans-serif`;g.fillText(t,x,y+.5*k);
+  });
+  g.fillStyle='rgba(12,19,15,.8)';g.beginPath();g.arc(W-28*k,28*k,17*k,0,7);g.fill();
+  g.fillStyle='#fff';g.textAlign='center';g.textBaseline='middle';g.font=`800 ${13*k}px Archivo, Arial, sans-serif`;g.fillText('N',W-28*k,32*k);
+  g.beginPath();g.moveTo(W-28*k,15*k);g.lineTo(W-33*k,24*k);g.lineTo(W-23*k,24*k);g.fill();
+  if(withTiles){g.font=`${9*k}px Inter, Arial, sans-serif`;g.textAlign='right';g.textBaseline='bottom';g.fillStyle='rgba(255,255,255,.9)';g.shadowColor='#000';g.shadowBlur=2*k;g.fillText('Imagery © Esri, Maxar, Earthstar Geographics',W-8*k,H-6*k)}
+  return c.toDataURL('image/jpeg',.86);
+ };
+ if(tiles.length){try{return{data:draw(true),sat:true}}catch(e){}}
+ return{data:draw(false),sat:false};
+}
+async function photoJpeg(p,max){
+ try{
+  const im=new Image();im.src=p.url;await im.decode();
+  let w=im.naturalWidth||640,h=im.naturalHeight||480;const s=Math.min(1,max/Math.max(w,h));w=Math.round(w*s);h=Math.round(h*s);
+  const c=document.createElement('canvas');c.width=w;c.height=h;const g=c.getContext('2d');g.fillStyle='#fff';g.fillRect(0,0,w,h);g.drawImage(im,0,0,w,h);
+  return{data:c.toDataURL('image/jpeg',.72),w,h};
+ }catch(e){return null}
+}
+let libP=null;
+const loadPdfLib=()=>libP||(libP=new Promise((res,rej)=>{const sc=document.createElement('script');sc.src='pdf-lib.min.js';sc.onload=()=>res(window.PDFLib);sc.onerror=()=>{libP=null;rej(new Error('pdf-lib'))};document.head.appendChild(sc)}));
+
+async function buildPdf(progress){
+ const{PDFDocument,StandardFonts,rgb,PDFString}=await loadPdfLib();
+ const doc=await PDFDocument.create(),name=surveyName();
+ doc.setTitle(name);doc.setCreator('Photo trail');doc.setProducer('Photo trail');
+ const f=await doc.embedFont(StandardFonts.Helvetica),fb=await doc.embedFont(StandardFonts.HelveticaBold);
+ const PW=595.28,PH=841.89,M=40,CW=PW-2*M,INK=rgb(.086,.125,.102),MUTE=rgb(.36,.42,.38),OR=rgb(1,.353,.122),LINE=rgb(.85,.88,.85),PALE=rgb(.95,.96,.94),WHITE=rgb(1,1,1);
+ const T=s=>String(s).replace(/[‘’]/g,"'").replace(/[“”]/g,'"').replace(/[^\x20-\x7E -ÿ–—•…]/g,'?');
+ const all=sorted().map((p,i)=>Object.assign({},p,{n:i+1})),pts=all.filter(p=>p.lat!=null);
+ let page,y;
+ const newPage=()=>{page=doc.addPage([PW,PH]);y=M};
+ const text=(s,x,yy,size,font=f,color=INK)=>page.drawText(T(s),{x,y:PH-yy-size*.8,size,font,color});
+ const fit=(s,font,size,w)=>{s=T(s);if(font.widthOfTextAtSize(s,size)<=w)return s;while(s.length>1&&font.widthOfTextAtSize(s+'…',size)>w)s=s.slice(0,-1);return s+'…'};
+ const link=(x,yy,w,h,url)=>{const ctx=doc.context;page.node.addAnnot(ctx.register(ctx.obj({Type:'Annot',Subtype:'Link',Rect:[x,PH-yy-h,x+w,PH-yy],Border:[0,0,0],A:{Type:'Action',S:'URI',URI:PDFString.of(url)}})))};
+ const badge=(n,cx,cy,r)=>{page.drawCircle({x:cx,y:PH-cy,size:r,color:OR,borderColor:WHITE,borderWidth:1.5});const t=String(n),sz=r*(t.length>2?.85:1.05),w=fb.widthOfTextAtSize(t,sz);page.drawText(t,{x:cx-w/2,y:PH-cy-sz*.36,size:sz,font:fb,color:WHITE})};
+
+ // page 1: title, map, summary
+ newPage();
+ text('Survey report',M,y,10,fb,OR);y+=16;
+ text(fit(name,fb,24,CW),M,y,24,fb);y+=32;
+ const span=all.length?fmtLong(all[0].t)+'  to  '+fmtLong(all[all.length-1].t):'';
+ text(`${all.length} photo${all.length===1?'':'s'}  •  ${pts.length} located  •  route ${fmtDist(routeLen(pts))}`,M,y,10,f,MUTE);y+=14;
+ text(span,M,y,10,f,MUTE);y+=22;
+ progress('Drawing the map…');
+ const mh=CW*.75,mp=await mapPicture(pts,1600,1200),mimg=await doc.embedJpg(mp.data);
+ page.drawImage(mimg,{x:M,y:PH-y-mh,width:CW,height:mh});page.drawRectangle({x:M,y:PH-y-mh,width:CW,height:mh,borderColor:LINE,borderWidth:.8});
+ y+=mh+10;
+ if(!mp.sat){text('Satellite imagery was unavailable when this report was made, so the points are shown on a plain grid.',M,y,8.5,f,MUTE);y+=13}
+ const gu=gmRoute();
+ if(gu){const lt=pts.length>10?`Open photos 1–10 as a route in Google Maps (Google allows 10 stops)`:'Open this route in Google Maps';text(lt,M,y,10,fb,OR);link(M,y,fb.widthOfTextAtSize(T(lt),10),12,gu);y+=22}
+ // index table
+ const cols=[[M,'No.',30],[M+32,'Taken',150],[M+190,'Latitude',85],[M+280,'Longitude',85],[M+372,'Source',CW-372]];
+ const head=()=>{text('Photo index',M,y,13,fb);y+=20;cols.forEach(([x,h])=>text(h,x,y,8.5,fb,MUTE));y+=12;page.drawLine({start:{x:M,y:PH-y},end:{x:M+CW,y:PH-y},thickness:.8,color:LINE});y+=5};
+ if(y>PH-M-80)newPage();
+ head();
+ for(const p of all){
+  if(y+16>PH-M-16){newPage();head()}
+  text(String(p.n),M,y,9,fb);text(fmtLong(p.t),M+32,y,9);
+  if(p.lat!=null){text(p.lat.toFixed(6),M+190,y,9);text(p.lon.toFixed(6),M+280,y,9);text(srcShort[p.src]||'',M+372,y,9,f,MUTE);link(M,y-3,CW,15,gmPoint(p))}
+  else text('No location recorded',M+190,y,9,f,MUTE);
+  y+=16;page.drawLine({start:{x:M,y:PH-y+4},end:{x:M+CW,y:PH-y+4},thickness:.4,color:LINE});
+ }
+ // section maps: zoomed views of 12 photos at a time, so every number is legible
+ if(pts.length>12){
+  const SZ=12,secs=[];for(let i=0;i<pts.length;i+=SZ)secs.push(pts.slice(i,i+SZ));
+  const slotH=(PH-2*M-30)/2,mh2=slotH-34;
+  for(let k=0;k<secs.length;k++){
+   if(k%2===0)newPage();
+   progress(`Drawing section map ${k+1} of ${secs.length}…`);
+   const sec=secs[k],yy=M+(k%2)*slotH;
+   text(`Section map ${k+1} of ${secs.length}: photos ${sec[0].n}–${sec[sec.length-1].n}`,M,yy,12,fb);
+   const mp2=await mapPicture(sec,1600,Math.round(1600*mh2/CW)),im2=await doc.embedJpg(mp2.data);
+   page.drawImage(im2,{x:M,y:PH-yy-20-mh2,width:CW,height:mh2});page.drawRectangle({x:M,y:PH-yy-20-mh2,width:CW,height:mh2,borderColor:LINE,borderWidth:.8});
+  }
+ }
+ // photo pages: 2 x 2 per page
+ const GW=(CW-16)/2,IH=GW*.75,CH=(PH-2*M-30)/2;
+ for(let i=0;i<all.length;i++){
+  const p=all[i],slot=i%4;if(slot===0)newPage();
+  progress(`Adding photo ${i+1} of ${all.length}…`);
+  const x=M+(slot%2)*(GW+16),yy=M+Math.floor(slot/2)*CH;
+  page.drawRectangle({x,y:PH-yy-IH,width:GW,height:IH,color:PALE});
+  const j=await photoJpeg(p,900);
+  if(j){const im=await doc.embedJpg(j.data),s=Math.min(GW/j.w,IH/j.h),w=j.w*s,h=j.h*s;page.drawImage(im,{x:x+(GW-w)/2,y:PH-yy-(IH+h)/2,width:w,height:h})}
+  else text('Photo could not be added (format not supported)',x+10,yy+IH/2,9,f,MUTE);
+  badge(p.n,x+16,yy+16,12);
+  let ty=yy+IH+10;
+  text(fit(`${p.n}.  ${p.name}`,fb,11,GW),x,ty,11,fb);ty+=16;
+  text(fmtLong(p.t),x,ty,9,f,MUTE);ty+=13;
+  if(p.lat!=null){
+   text(`Lat ${p.lat.toFixed(6)}   Lon ${p.lon.toFixed(6)}`,x,ty,9.5,fb);ty+=13;
+   text(`${dms(p.lat,'N','S')}   ${dms(p.lon,'E','W')}`,x,ty,9);ty+=13;
+   text(srcLong(p),x,ty,9,f,MUTE);ty+=14;
+   text('View on Google Maps',x,ty,9,fb,OR);link(x,ty-2,fb.widthOfTextAtSize('View on Google Maps',9),13,gmPoint(p));
+  }else text('No location recorded',x,ty,9.5,fb,MUTE);
+  await new Promise(r=>setTimeout(r,0));
+ }
+ // footers
+ const pages=doc.getPages(),nm=T(name);
+ pages.forEach((pg,i)=>{const s=`Page ${i+1} of ${pages.length}`;pg.drawText(fit(nm+'  •  Photo trail',f,8,CW-80),{x:M,y:22,size:8,font:f,color:MUTE});pg.drawText(s,{x:PW-M-f.widthOfTextAtSize(s,8),y:22,size:8,font:f,color:MUTE})});
+ return{blob:new Blob([await doc.save()],{type:'application/pdf'}),map:mp.data,pages:pages.length};
+}
+$('#mkPdf').onclick=async()=>{
+ const b=$('#mkPdf');b.disabled=true;$('#pdfReady').hidden=true;
+ try{
+  const r=await buildPdf(m=>{b.textContent=m});
+  pdfBlob=r.blob;if(pdfUrl)URL.revokeObjectURL(pdfUrl);pdfUrl=URL.createObjectURL(r.blob);
+  const sv=$('#pdfSave');sv.href=pdfUrl;sv.download=fileBase()+'.pdf';
+  $('#pdfThumb').src=r.map;$('#pdfInfo').textContent=`${fileBase()}.pdf · ${r.pages} page${r.pages>1?'s':''} · ${(r.blob.size/1048576).toFixed(1)} MB`;
+  $('#pdfReady').hidden=false;
+ }catch(e){console.error(e);toast("Couldn't create the PDF. Check your connection and try again.")}
+ b.disabled=false;b.textContent='Create PDF';
+};
 
 /* ---------- storage: trails survive closing the app ---------- */
 let db=null;

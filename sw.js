@@ -1,7 +1,7 @@
 // Caches the app itself so it opens instantly and works with a weak signal.
 // Satellite tiles always come from the network.
-const CACHE = 'photo-trail-v1';
-const SHELL = ['./', 'index.html', 'manifest.webmanifest', 'icon.svg', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png', 'favicon.png'];
+const CACHE = 'photo-trail-v2';
+const SHELL = ['./', 'index.html', 'manifest.webmanifest', 'icon.svg', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png', 'favicon.png', 'pdf-lib.min.js'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));

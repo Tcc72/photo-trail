@@ -33,7 +33,16 @@ Allow location when asked the first time you tap **Take photo**.
 | `index.html` | The whole app |
 | `manifest.webmanifest` | App name, colours and icons for installing |
 | `sw.js` | Lets it open offline and load quickly |
+| `pdf-lib.min.js` | PDF library for survey reports ([pdf-lib](https://pdf-lib.js.org), MIT licence) |
 | `icon.svg`, `icon-*.png`, `apple-touch-icon.png`, `favicon.png` | Logo at each size |
+
+## Sharing a trail
+
+Tap **Share trail** to get:
+- **PDF survey report:** overview map, coordinate index, section maps (12 photos each)
+  for longer trails, then every photo with its number, time and coordinates.
+- **KML file:** every point and the route, for Google Earth or Google My Maps.
+- **Google Maps link:** the route as walking directions (Google allows up to 10 stops).
 
 ## Notes
 
