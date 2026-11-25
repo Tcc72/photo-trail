@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Photo trail</title>
+<meta name="description" content="Pin your photos on a satellite map in the order you took them.">
+<meta name="theme-color" content="#0c130f">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="favicon.png" type="image/png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Photo trail">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* VOICE: practical field tool, calm and confident
+   IDEA: an expedition logbook pinned onto an aerial photograph
+   PICTURE: the satellite map itself, numbered pins joined by the route walked
+   COLOUR and TYPE: deep moss ground, signal-orange pins, white route; Archivo + Inter
+   LAYOUT: map first and large; logbook beside it on wide screens, below it on phones */
+:root{color-scheme:light dark;--bg:light-dark(#f3f5f0,#0c130f);--panel:light-dark(#fff,#142019);--ink:light-dark(#16201a,#e8eee9);--mute:light-dark(#566559,#9aab9f);--line:light-dark(#dce3db,#22322a);--pin:#ff5a1f;--sel:#ffd23f;--warn:light-dark(#8a4f00,#ffc46b);--btn:light-dark(#16201a,#e8eee9);--btnink:light-dark(#fff,#0c130f)}
+:root[data-theme=light]{color-scheme:light}:root[data-theme=dark]{color-scheme:dark}
+*{box-sizing:border-box;min-width:0}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 Inter,system-ui,sans-serif;overflow-x:clip}
+header{padding:calc(16px + env(safe-area-inset-top)) max(4vw,16px,env(safe-area-inset-right)) 12px max(4vw,16px,env(safe-area-inset-left));display:flex;flex-wrap:wrap;gap:12px 20px;align-items:end;justify-content:space-between}
+h1{font:800 clamp(28px,4vw,40px)/1.05 Archivo,system-ui,sans-serif;margin:0;letter-spacing:-.01em}
+header p{margin:4px 0 0;color:var(--mute);font-size:15px;max-width:52ch}
+.tools{display:flex;flex-wrap:wrap;gap:8px}
+button,.btn{font:600 15px/1 Inter,system-ui,sans-serif;min-height:44px;padding:0 16px;border-radius:12px;border:1px solid var(--line);background:var(--panel);color:var(--ink);cursor:pointer;display:inline-flex;align-items:center;gap:8px}
+button.primary{background:var(--pin);border-color:var(--pin);color:#fff}
+button:focus-visible{outline:3px solid var(--sel);outline-offset:2px}
+input[type=file]{display:none}
+main{display:grid;gap:0;padding:0 max(4vw,16px,env(safe-area-inset-right)) calc(24px + env(safe-area-inset-bottom)) max(4vw,16px,env(safe-area-inset-left))}
+.brand{display:flex;gap:12px;align-items:center}.brand img{width:44px;height:44px;border-radius:11px;flex:none}
+@media(min-width:900px){main{grid-template-columns:minmax(0,1fr) 380px;gap:20px}}
+.map{position:relative;overflow:hidden;height:58vh;min-height:340px;border-radius:18px;touch-action:none;cursor:grab;user-select:none;
+ background:#16241b;background-image:linear-gradient(#ffffff10 1px,transparent 1px),linear-gradient(90deg,#ffffff10 1px,transparent 1px);background-size:64px 64px}
+@media(min-width:900px){.map{height:calc(100vh - 140px)}}
+.map.placing{cursor:crosshair}
+.tile{position:absolute;left:0;top:0;width:256px;height:256px;pointer-events:none}
+#route{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+#route polyline{fill:none;stroke:#fff;stroke-width:3;stroke-dasharray:8 7;stroke-linecap:round;stroke-linejoin:round;filter:drop-shadow(0 1px 2px #0009)}
+.pin{position:absolute;left:0;top:0;width:32px;height:32px;margin:-16px 0 0 -16px;border-radius:50%;background:var(--pin);color:#fff;border:3px solid #fff;font:800 14px/26px Archivo,sans-serif;text-align:center;box-shadow:0 3px 10px #0008;cursor:pointer}
+.pin.on{background:var(--sel);color:#16201a;transform:scale(1.2);z-index:2}
+.ctl{position:absolute;right:12px;top:12px;display:flex;flex-direction:column;gap:6px;z-index:5}
+.ctl button{width:44px;padding:0;justify-content:center;font-size:20px;background:#0c130fdd;color:#fff;border-color:#ffffff30}
+.note{position:absolute;left:12px;right:68px;top:12px;z-index:4;background:#0c130fe6;color:#fff;border-radius:12px;padding:10px 12px;font-size:14px;line-height:1.4}
+.note[hidden]{display:none}
+.attr{position:absolute;right:8px;bottom:6px;font-size:11px;color:#fffc;text-shadow:0 1px 2px #000;z-index:3}
+.card{position:absolute;left:12px;bottom:12px;right:12px;max-width:420px;z-index:5;display:flex;gap:12px;align-items:center;background:var(--panel);color:var(--ink);border-radius:14px;padding:10px;box-shadow:0 8px 28px #0007}
+.card[hidden]{display:none}
+.card img{width:84px;height:84px;object-fit:cover;border-radius:10px;flex:none;background:var(--line)}
+.card b{font:800 18px/1.2 Archivo,sans-serif;display:block}
+.card span{display:block;font-size:14px;color:var(--mute)}
+aside{padding-top:16px}
+@media(min-width:900px){aside{padding-top:0;max-height:calc(100vh - 140px);overflow:auto}}
+aside h2{font:800 20px/1.2 Archivo,sans-serif;margin:0 0 4px}
+.sub{color:var(--mute);font-size:14px;margin:0 0 12px}
+ol{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.item{display:grid;grid-template-columns:36px 64px minmax(0,1fr);gap:10px;align-items:center;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:8px;cursor:pointer}
+.item.on{border-color:var(--sel);box-shadow:0 0 0 2px var(--sel)}
+.num{width:32px;height:32px;border-radius:50%;background:var(--pin);color:#fff;font:800 14px/32px Archivo,sans-serif;text-align:center}
+.num.off{background:transparent;color:var(--mute);border:2px dashed var(--mute);line-height:28px}
+.item img{width:64px;height:64px;object-fit:cover;border-radius:10px;background:var(--line)}
+.meta b{display:block;font-weight:600;font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.meta span{display:block;font-size:13px;color:var(--mute)}
+.meta em{font-style:normal;color:var(--warn);font-weight:600}
+.acts{grid-column:3;display:flex;gap:6px;flex-wrap:wrap}
+.acts button{min-height:36px;padding:0 12px;font-size:14px;border-radius:10px}
+.empty{border:2px dashed var(--line);border-radius:14px;padding:20px;color:var(--mute);font-size:15px}
+.toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--btn);color:var(--btnink);padding:12px 16px;border-radius:12px;font-size:14px;max-width:min(92vw,460px);z-index:20;box-shadow:0 8px 28px #0006}
+.toast[hidden]{display:none}
+@media(prefers-reduced-motion:no-preference){.pin{transition:transform .15s}}
+</style>
+</head>
+<body>
+<header>
+ <div>
+  <div class="brand"><img src="icon-192.png" alt=""><h1>Photo trail</h1></div>
+  <p>Take photos as you go, or load ones you've already taken. Each is pinned where it was shot, numbered in the order it was taken.</p>
+ </div>
+ <div class="tools">
+  <button class="primary" id="snap" type="button">Take photo</button>
+  <button id="add" type="button">Add photos</button>
+  <button id="sample" type="button">Sample walk</button>
+  <button id="copy" type="button">Copy GeoJSON</button>
+  <button id="clear" type="button">Clear</button>
+  <input id="camIn" type="file" accept="image/*" capture="environment">
+  <input id="fileIn" type="file" accept="image/*,.heic,.heif" multiple>
+ </div>
+</header>
+<main>
+ <div class="map" id="map" aria-label="Satellite map of photo locations">
+  <div id="tiles"></div>
+  <svg id="route" aria-hidden="true"><polyline points=""/></svg>
+  <div id="pins"></div>
+  <div class="ctl">
+   <button type="button" id="zin" aria-label="Zoom in">+</button>
+   <button type="button" id="zout" aria-label="Zoom out">−</button>
+   <button type="button" id="fit" aria-label="Fit all photos" style="font-size:14px">Fit</button>
+  </div>
+  <div class="note" id="note" hidden></div>
+  <div class="attr" id="attr" hidden>Imagery © Esri, Maxar, Earthstar Geographics</div>
+  <div class="card" id="card" hidden></div>
+ </div>
+ <aside>
+  <h2>Logbook</h2>
+  <p class="sub" id="count">No photos yet.</p>
+  <ol id="list"></ol>
+ </aside>
+</main>
+<div class="toast" id="toast" hidden></div>
+<script>
+{
+const $=s=>document.querySelector(s);
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const TILE=256,MINZ=2,MAXZ=19;
+const tileUrl=(z,x,y)=>`https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${z}/${y}/${x}`;
+const map=$('#map'),tilesEl=$('#tiles'),pinsEl=$('#pins'),line=$('#route polyline'),list=$('#list');
+let photos=[],uid=Date.now(),sel=null,placing=null,tilesOk=false,tilesBlocked=false;
+const view={z:5,cx:0,cy:0};
+const ws=z=>TILE*2**z;
+const project=(lat,lon,z)=>{const s=ws(z),r=Math.max(-85.05,Math.min(85.05,lat))*Math.PI/180;return[(lon+180)/360*s,(1-Math.log(Math.tan(r)+1/Math.cos(r))/Math.PI)/2*s]};
+const unproject=(x,y,z)=>{const s=ws(z);return[Math.atan(Math.sinh(Math.PI*(1-2*y/s)))*180/Math.PI,x/s*360-180]};
+const setCenter=(lat,lon,z)=>{view.z=z;[view.cx,view.cy]=project(lat,lon,z)};
+const sorted=()=>photos.slice().sort((a,b)=>a.t-b.t);
+setCenter(54,-2.5,5);
+
+let toastT;
+function toast(msg){const t=$('#toast');t.textContent=msg;t.hidden=false;clearTimeout(toastT);toastT=setTimeout(()=>t.hidden=true,4500)}
+function note(){
+ const n=$('#note'),msgs=[];
+ if(placing!=null){const i=sorted().findIndex(p=>p.id===placing);msgs.push(`Tap the map where photo ${i+1} was taken.`)}
+ else if(tilesBlocked)msgs.push("Satellite imagery couldn't load. Check your connection; pins are still shown on a plain grid.");
+ n.textContent=msgs.join(' ');n.hidden=!msgs.length;
+}
+
+/* ---------- map ---------- */
+const cache=new Map();
+function render(){
+ const W=map.clientWidth,H=map.clientHeight,z=view.z,n=2**z,left=view.cx-W/2,top=view.cy-H/2,need=new Set();
+ if(!tilesBlocked){
+  for(let tx=Math.floor(left/TILE);tx<=Math.floor((left+W)/TILE);tx++)for(let ty=Math.floor(top/TILE);ty<=Math.floor((top+H)/TILE);ty++){
+   if(ty<0||ty>=n)continue;
+   const key=z+'/'+tx+'/'+ty;need.add(key);
+   let img=cache.get(key);
+   if(!img){
+    img=new Image();img.className='tile';img.alt='';img.draggable=false;
+    img.onload=()=>{if(!tilesOk){tilesOk=true;$('#attr').hidden=false;note()}};
+    img.onerror=()=>{if(!tilesOk&&!tilesBlocked){tilesBlocked=true;note();render()}};
+    img.src=tileUrl(z,((tx%n)+n)%n,ty);cache.set(key,img);tilesEl.appendChild(img);
+   }
+   img.style.transform=`translate(${tx*TILE-left}px,${ty*TILE-top}px)`;
+  }
+ }
+ for(const[k,img]of cache)if(!need.has(k)){img.remove();cache.delete(k)}
+ const s=sorted(),pts=[];let html='';
+ s.forEach((p,i)=>{if(p.lat==null)return;const[x,y]=project(p.lat,p.lon,z),sx=x-left,sy=y-top;pts.push(sx.toFixed(1)+','+sy.toFixed(1));
+  html+=`<div class="pin${p.id===sel?' on':''}" data-id="${p.id}" style="transform:translate(${sx}px,${sy}px)">${i+1}</div>`});
+ pinsEl.innerHTML=html;line.setAttribute('points',pts.join(' '));
+}
+function zoomAt(dz,sx,sy){
+ const W=map.clientWidth,H=map.clientHeight,nz=Math.max(MINZ,Math.min(MAXZ,view.z+dz));if(nz===view.z)return;
+ if(sx==null){sx=W/2;sy=H/2}
+ const f=2**(nz-view.z),wx=view.cx-W/2+sx,wy=view.cy-H/2+sy;
+ view.cx=wx*f-(sx-W/2);view.cy=wy*f-(sy-H/2);view.z=nz;render();
+}
+function fit(){
+ const pts=sorted().filter(p=>p.lat!=null);if(!pts.length)return;
+ const W=map.clientWidth,H=map.clientHeight;
+ if(pts.length===1){setCenter(pts[0].lat,pts[0].lon,17);render();return}
+ for(let z=18;z>=MINZ;z--){
+  const xy=pts.map(p=>project(p.lat,p.lon,z)),xs=xy.map(a=>a[0]),ys=xy.map(a=>a[1]);
+  const x0=Math.min(...xs),x1=Math.max(...xs),y0=Math.min(...ys),y1=Math.max(...ys);
+  if(x1-x0<=W-110&&y1-y0<=H-150||z===MINZ){view.z=z;view.cx=(x0+x1)/2;view.cy=(y0+y1)/2+20;render();return}
+ }
+}
+const ptrs=new Map();let drag=null,pinch=null,moved=false;
+map.addEventListener('pointerdown',e=>{
+ if(e.target.closest('.ctl,.card'))return;
+ map.setPointerCapture(e.pointerId);ptrs.set(e.pointerId,[e.clientX,e.clientY]);
+ if(ptrs.size===1){drag={x:e.clientX,y:e.clientY,cx:view.cx,cy:view.cy};moved=false}
+ else if(ptrs.size===2){const[a,b]=[...ptrs.values()];pinch={d:Math.hypot(a[0]-b[0],a[1]-b[1])};drag=null;moved=true}
+});
+map.addEventListener('pointermove',e=>{
+ if(!ptrs.has(e.pointerId))return;ptrs.set(e.pointerId,[e.clientX,e.clientY]);
+ if(pinch&&ptrs.size===2){
+  const[a,b]=[...ptrs.values()],d=Math.hypot(a[0]-b[0],a[1]-b[1]),r=map.getBoundingClientRect(),mx=(a[0]+b[0])/2-r.left,my=(a[1]+b[1])/2-r.top;
+  if(d/pinch.d>1.5){zoomAt(1,mx,my);pinch.d=d}else if(d/pinch.d<.67){zoomAt(-1,mx,my);pinch.d=d}
+ }else if(drag){
+  const dx=e.clientX-drag.x,dy=e.clientY-drag.y;if(Math.hypot(dx,dy)>5)moved=true;
+  if(moved){view.cx=drag.cx-dx;view.cy=drag.cy-dy;render()}
+ }
+});
+function up(e){
+ if(!ptrs.has(e.pointerId))return;ptrs.delete(e.pointerId);
+ if(e.type==='pointerup'&&drag&&!moved)tap(e);
+ if(ptrs.size<2)pinch=null;
+ if(!ptrs.size)drag=null;
+}
+map.addEventListener('pointerup',up);map.addEventListener('pointercancel',up);
+map.addEventListener('wheel',e=>{e.preventDefault();const r=map.getBoundingClientRect();zoomAt(e.deltaY<0?1:-1,e.clientX-r.left,e.clientY-r.top)},{passive:false});
+function tap(e){
+ const r=map.getBoundingClientRect(),sx=e.clientX-r.left,sy=e.clientY-r.top;
+ if(placing!=null){
+  const p=photos.find(q=>q.id===placing);
+  if(p){[p.lat,p.lon]=unproject(view.cx-map.clientWidth/2+sx,view.cy-map.clientHeight/2+sy,view.z);p.src='manual';sel=p.id;save(p)}
+  placing=null;map.classList.remove('placing');refresh();return;
+ }
+ const pin=document.elementFromPoint(e.clientX,e.clientY)?.closest('.pin');
+ select(pin?+pin.dataset.id:null);
+}
+$('#zin').onclick=()=>zoomAt(1);$('#zout').onclick=()=>zoomAt(-1);$('#fit').onclick=fit;
+const ro=new ResizeObserver(()=>render());ro.observe(map);
+
+/* ---------- logbook ---------- */
+const srcLabel={exif:'from photo',live:'logged live',manual:'placed by hand'};
+const fmt=t=>new Date(t).toLocaleString(undefined,{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
+const coord=p=>`${p.lat.toFixed(5)}, ${p.lon.toFixed(5)}`;
+function renderList(){
+ const s=sorted(),miss=s.filter(p=>p.lat==null).length;
+ $('#count').textContent=!s.length?'No photos yet.':`${s.length} photo${s.length>1?'s':''} in the order taken`+(miss?` · ${miss} without a location`:'');
+ list.innerHTML=s.length?s.map((p,i)=>`<li class="item${p.id===sel?' on':''}" data-id="${p.id}">
+  <span class="num${p.lat==null?' off':''}">${i+1}</span><img src="${esc(p.url)}" alt="">
+  <div class="meta"><b>${esc(p.name)}</b><span>${esc(fmt(p.t))} · ${esc(p.timeSrc)}</span>
+  <span>${p.lat!=null?esc(coord(p))+' · '+srcLabel[p.src]:'<em>No location</em>'}</span></div>
+  <div class="acts"><button type="button" data-a="place">${p.lat==null?'Place on map':'Move'}</button><button type="button" data-a="del">Remove</button></div></li>`).join('')
+  :'<li class="empty">Tap <b>Take photo</b> to shoot and log your position, <b>Add photos</b> to load ones with location data, or try the <b>Sample walk</b>.</li>';
+}
+function renderCard(){
+ const c=$('#card'),s=sorted(),i=s.findIndex(p=>p.id===sel);
+ if(i<0||s[i].lat==null){c.hidden=true;return}
+ const p=s[i];c.hidden=false;
+ c.innerHTML=`<img src="${esc(p.url)}" alt=""><div><b>${i+1} · ${esc(p.name)}</b><span>${esc(fmt(p.t))}</span><span>${esc(coord(p))} · ${srcLabel[p.src]}</span></div>`;
+}
+function select(id){sel=id;renderList();renderCard();render()}
+function refresh(doFit){renderList();renderCard();note();if(doFit)fit();else render()}
+list.addEventListener('click',e=>{
+ const li=e.target.closest('.item');if(!li)return;const id=+li.dataset.id,a=e.target.closest('button')?.dataset.a;
+ if(a==='del'){const p=photos.find(q=>q.id===id);if(p&&p.url.startsWith('blob:'))URL.revokeObjectURL(p.url);photos=photos.filter(q=>q.id!==id);drop(id);if(sel===id)sel=null;refresh();return}
+ if(a==='place'){placing=id;sel=id;map.classList.add('placing');refresh();map.scrollIntoView({behavior:'smooth',block:'center'});return}
+ const p=photos.find(q=>q.id===id);
+ if(p&&p.lat!=null){const W=map.clientWidth;if(view.z<15)setCenter(p.lat,p.lon,16);else[view.cx,view.cy]=project(p.lat,p.lon,view.z)}
+ select(id);
+});
+
+/* ---------- EXIF (JPEG) ---------- */
+function parseExif(buf){
+ const v=new DataView(buf);if(v.getUint16(0)!==0xFFD8)return{};
+ let o=2;
+ while(o+10<v.byteLength){
+  const m=v.getUint16(o),len=v.getUint16(o+2);
+  if(m===0xFFE1&&v.getUint32(o+4)===0x45786966)return readTiff(v,o+10);
+  if((m&0xFF00)!==0xFF00||m===0xFFDA)break;
+  o+=2+len;
+ }
+ return{};
+}
+function readTiff(v,t){
+ const le=v.getUint16(t)===0x4949,u16=o=>v.getUint16(o,le),u32=o=>v.getUint32(o,le);
+ const ifd=o=>{const n=u16(o),out={};for(let i=0;i<n;i++){const e=o+2+i*12;out[u16(e)]={count:u32(e+4),vo:e+8}}return out};
+ const ascii=en=>{const p=en.count>4?t+u32(en.vo):en.vo;let s='';for(let i=0;i<en.count-1;i++)s+=String.fromCharCode(v.getUint8(p+i));return s};
+ const rats=en=>{const p=t+u32(en.vo),a=[];for(let i=0;i<en.count;i++){const d=u32(p+i*8+4);a.push(d?u32(p+i*8)/d:0)}return a};
+ const r={},i0=ifd(t+u32(t+4));
+ let ds=i0[0x0132]?ascii(i0[0x0132]):'';
+ try{if(i0[0x8769]){const ex=ifd(t+u32(i0[0x8769].vo));if(ex[0x9003])ds=ascii(ex[0x9003])}}catch(e){}
+ const m=ds.match(/(\d{4}):(\d\d):(\d\d) (\d\d):(\d\d):(\d\d)/);
+ if(m)r.date=new Date(+m[1],m[2]-1,+m[3],+m[4],+m[5],+m[6]);
+ try{if(i0[0x8825]){const g=ifd(t+u32(i0[0x8825].vo));if(g[2]&&g[4]){
+  const dms=a=>a[0]+a[1]/60+a[2]/3600;let lat=dms(rats(g[2])),lon=dms(rats(g[4]));
+  if(g[1]&&ascii(g[1])==='S')lat=-lat;if(g[3]&&ascii(g[3])==='W')lon=-lon;
+  if(lat||lon){r.lat=lat;r.lon=lon}}}}catch(e){}
+ return r;
+}
+
+/* ---------- adding photos ---------- */
+async function addFiles(files,live){
+ let added=0,noLoc=0;
+ for(const f of files){
+  let ex={};try{ex=parseExif(await f.slice(0,524288).arrayBuffer())}catch(e){}
+  const p={id:++uid,name:f.name||'Photo',url:URL.createObjectURL(f),blob:f,t:null,lat:null,lon:null,src:null,timeSrc:''};
+  if(live){p.t=live.t;p.timeSrc='taken in app';if(live.pos){p.lat=live.pos.latitude;p.lon=live.pos.longitude;p.src='live'}}
+  if(p.t==null){if(ex.date&&!isNaN(ex.date)){p.t=ex.date.getTime();p.timeSrc='camera time'}else{p.t=f.lastModified||Date.now();p.timeSrc='file date'}}
+  if(p.lat==null&&ex.lat!=null){p.lat=ex.lat;p.lon=ex.lon;p.src='exif'}
+  if(p.lat==null)noLoc++;
+  photos.push(p);save(p);added++;
+ }
+ refresh(true);
+ if(noLoc)toast(`${noLoc} of ${added} photo${added>1?'s':''} had no location. Use “Place on map” to pin ${noLoc>1?'them':'it'} by hand.`);
+}
+const getPos=()=>new Promise(res=>{
+ if(!navigator.geolocation)return res(null);
+ try{navigator.geolocation.getCurrentPosition(p=>res(p.coords),()=>res(null),{enableHighAccuracy:true,timeout:12000,maximumAge:0})}catch(e){res(null)}
+});
+let early=null;
+$('#snap').onclick=()=>{early=getPos();$('#camIn').click()};
+$('#camIn').onchange=async e=>{
+ const files=[...e.target.files];e.target.value='';if(!files.length)return;
+ const t=Date.now();toast('Getting your location…');
+ const pos=(await getPos())||(early&&await early);
+ await addFiles(files,{t,pos});
+ if(pos)toast(`Logged photo at ${pos.latitude.toFixed(5)}, ${pos.longitude.toFixed(5)} (±${Math.round(pos.accuracy)} m).`);
+};
+$('#add').onclick=()=>$('#fileIn').click();
+$('#fileIn').onchange=e=>{const f=[...e.target.files];e.target.value='';if(f.length)addFiles(f)};
+map.addEventListener('dragover',e=>e.preventDefault());
+map.addEventListener('drop',e=>{e.preventDefault();const f=[...e.dataTransfer.files].filter(x=>/^image\//.test(x.type)||/\.(jpe?g|heic|heif)$/i.test(x.name));if(f.length)addFiles(f)});
+
+/* ---------- sample, export, clear ---------- */
+const SAMPLE=[['Westminster Bridge',51.5008,-0.1219,'#5b8db8'],['London Eye',51.5033,-0.1196,'#8a6fb5'],['Southbank Centre',51.5063,-0.1160,'#c98a3d'],['Tate Modern',51.5076,-0.0994,'#6a7f5a'],['Borough Market',51.5055,-0.0910,'#b5584a'],['Tower Bridge',51.5055,-0.0754,'#3f7f8c']];
+const thumb=c=>'data:image/svg+xml;utf8,'+encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" fill="${c}"/><circle cx="46" cy="18" r="7" fill="#fff8"/><path d="M0 50 20 30 34 44 44 36 64 54V64H0z" fill="#0005"/></svg>`);
+$('#sample').onclick=()=>{
+ const base=new Date(2026,10,21,10,0).getTime();
+ SAMPLE.forEach(([n,lat,lon,c],i)=>{const p={id:++uid,name:n+' (sample)',url:thumb(c),blob:null,t:base+i*25*60000,lat,lon,src:'exif',timeSrc:'camera time'};photos.push(p);save(p)});
+ refresh(true);
+};
+$('#copy').onclick=async()=>{
+ const s=sorted();if(!s.length){toast('Nothing to copy yet.');return}
+ const gj={type:'FeatureCollection',features:s.filter(p=>p.lat!=null).map(p=>({type:'Feature',geometry:{type:'Point',coordinates:[+p.lon.toFixed(6),+p.lat.toFixed(6)]},properties:{order:s.indexOf(p)+1,name:p.name,taken:new Date(p.t).toISOString(),source:p.src}}))};
+ try{await navigator.clipboard.writeText(JSON.stringify(gj,null,1));toast('GeoJSON copied: paste it into any mapping tool.')}catch(e){toast("Copying isn't allowed here.")}
+};
+$('#clear').onclick=()=>{photos.forEach(p=>p.url.startsWith('blob:')&&URL.revokeObjectURL(p.url));photos=[];dropAll();sel=null;placing=null;map.classList.remove('placing');refresh()};
+
+/* ---------- storage: trails survive closing the app ---------- */
+let db=null;
+const openDb=()=>new Promise(res=>{try{const q=indexedDB.open('photo-trail',1);q.onupgradeneeded=()=>q.result.createObjectStore('photos',{keyPath:'id'});q.onsuccess=()=>res(q.result);q.onerror=()=>res(null)}catch(e){res(null)}});
+const store=()=>db.transaction('photos','readwrite').objectStore('photos');
+function save(p){if(!db)return;try{const rec={...p};delete rec.url;if(!rec.blob)rec.thumb=p.url;store().put(rec)}catch(e){}}
+function drop(id){if(db)try{store().delete(id)}catch(e){}}
+function dropAll(){if(db)try{store().clear()}catch(e){}}
+async function load(){
+ db=await openDb();if(!db)return;
+ const all=await new Promise(res=>{try{const q=db.transaction('photos').objectStore('photos').getAll();q.onsuccess=()=>res(q.result||[]);q.onerror=()=>res([])}catch(e){res([])}});
+ for(const r of all){r.url=r.blob?URL.createObjectURL(r.blob):r.thumb;delete r.thumb;photos.push(r);uid=Math.max(uid,r.id)}
+ if(all.length)refresh(true);
+ try{navigator.storage&&navigator.storage.persist&&navigator.storage.persist()}catch(e){}
+}
+
+refresh();load();
+if('serviceWorker' in navigator&&location.protocol==='https:')try{navigator.serviceWorker.register('sw.js').catch(()=>{})}catch(e){}
+}
+</script>
+</body>
+</html>
